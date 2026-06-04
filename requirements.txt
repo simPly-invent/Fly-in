@@ -1,0 +1,7 @@
+# Runtime: stdlib-only (no graph library is allowed per the subject).
+# pygame is OPTIONAL — only needed for the GUI view (`--pygame` or menu).
+pygame>=2.5
+
+# Dev tooling for linting / type checking.
+flake8>=6.0
+mypy>=1.5
