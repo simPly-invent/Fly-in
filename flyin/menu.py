@@ -35,146 +35,84 @@ DEFAULT_MAPS_DIR = Path(__file__).resolve().parent.parent / "maps"
 
 
 class Menu:
-    """Top-level interactive menu loop.
-
-    Attributes:
-        maps_dir: directory scanned for map files (recursively).
-        map_path: currently selected map file.
-        render_mode: 'terminal' or 'pygame'.
-    """
+    """Top-level interactive menu loop."""
 
     def __init__(self, maps_dir: Optional[Path] = None) -> None:
-        self.maps_dir: Path = maps_dir if maps_dir is not None else DEFAULT_MAPS_DIR
-        self.map_path: Optional[Path] = self._default_map()
-        self.render_mode: str = "terminal"
-        self.use_colour: bool = True
-        self.spec_only: bool = False
+        # - self.maps_dir = maps_dir si fourni sinon DEFAULT_MAPS_DIR.
+        # - self.map_path = self._default_map() (peut être None si dossier vide).
+        # - self.render_mode = "terminal" (par défaut).
+        # - self.use_colour = True ; self.spec_only = False.
+        raise NotImplementedError("À implémenter")
 
     # ----------------------------------------------------------- map listing
 
     def _all_maps(self) -> List[Path]:
-        """Return every .txt file under ``maps_dir`` sorted by category/name."""
-        if not self.maps_dir.is_dir():
-            return []
-        return sorted(self.maps_dir.rglob("*.txt"))
+        # - Si self.maps_dir n'est pas un dossier → retourner [].
+        # - Sinon retourner sorted(self.maps_dir.rglob("*.txt")).
+        raise NotImplementedError("À implémenter")
 
     def _default_map(self) -> Optional[Path]:
-        maps = self._all_maps() if hasattr(self, "maps_dir") else []
-        if not maps:
-            maps = sorted(DEFAULT_MAPS_DIR.rglob("*.txt"))
-        if not maps:
-            return None
-        # Prefer the simplest available map: easy → medium → hard → challenger.
-        preference = ("easy", "medium", "hard", "challenger")
-        for tier in preference:
-            for path in maps:
-                if tier in path.parts:
-                    return path
-        return maps[0]
+        # - maps = self._all_maps() si l'attribut existe, sinon sorted(DEFAULT_MAPS_DIR.rglob).
+        # - Si maps vide → None.
+        # - Préférer dans l'ordre les tiers "easy", "medium", "hard", "challenger":
+        #     pour chaque tier, retourner le premier path dont parts contient ce tier.
+        # - Fallback: maps[0].
+        raise NotImplementedError("À implémenter")
 
     # ------------------------------------------------------------- printing
 
     @staticmethod
     def _print(text: str = "") -> None:
-        sys.stdout.write(text + "\n")
-        sys.stdout.flush()
+        # - sys.stdout.write(text + "\n") puis flush.
+        raise NotImplementedError("À implémenter")
 
     def _print_header(self) -> None:
-        self._print(CLEAR + BOLD + " ============== " + RESET)
-        self._print(BOLD + "|  Fly-in menu  |" + RESET)
-        self._print(BOLD + " ============== " + RESET)
+        # - Afficher CLEAR + bandeau gras "|  Fly-in menu  |" entouré de "==============".
+        raise NotImplementedError("À implémenter")
 
     def _print_state(self) -> None:
-        map_label = str(self.map_path) if self.map_path else "(no map)"
-        self._print(f"  Map        : {GREEN}{map_label}{RESET}")
-        self._print(
-            f"  Render     : {CYAN}{self.render_mode}{RESET}"
-            f"  (colour: {'on' if self.use_colour else 'off'},"
-            f" spec-only: {'on' if self.spec_only else 'off'})"
-        )
+        # - map_label = str(self.map_path) ou "(no map)".
+        # - Afficher "  Map        : <map_label>" (vert).
+        # - Afficher "  Render     : <render_mode> (colour: on/off, spec-only: on/off)".
+        raise NotImplementedError("À implémenter")
 
     def _print_menu(self) -> None:
-        self._print()
-        self._print(BOLD + "  What do you want?" + RESET)
-        self._print("    1) Launch simulation")
-        self._print("    2) Choose a map")
-        self._print("    3) Switch render (terminal / pygame)")
-        self._print("    4) Toggle colour output")
-        self._print("    5) Toggle spec-only output (terminal mode)")
-        self._print("    6) Quit")
-        self._print()
+        # - Afficher la liste des options:
+        #     1) Launch simulation
+        #     2) Choose a map
+        #     3) Switch render (terminal / pygame)
+        #     4) Toggle colour output
+        #     5) Toggle spec-only output
+        #     6) Quit
+        raise NotImplementedError("À implémenter")
 
     # ------------------------------------------------------------- choices
 
     def _choose_map(self) -> None:
-        maps = self._all_maps()
-        if not maps:
-            self._print(RED + "No map files found under " + str(self.maps_dir) + RESET)
-            input("Press Enter to continue...")
-            return
-
-        # Group by parent folder (category) for a clearer listing.
-        groups: dict[str, List[Path]] = {}
-        for path in maps:
-            category = path.parent.name if path.parent != self.maps_dir else "(root)"
-            groups.setdefault(category, []).append(path)
-
-        index_to_path: List[Path] = []
-        self._print(CLEAR + BOLD + "  Available maps" + RESET)
-        for category in sorted(groups):
-            self._print(f"\n  {YELLOW}{category}{RESET}")
-            for path in groups[category]:
-                index_to_path.append(path)
-                self._print(f"    {len(index_to_path):>2}) {path.name}")
-        self._print("\n     0) Cancel")
-
-        choice = input("\n  Pick a number: ").strip()
-        if choice == "0" or choice == "":
-            return
-        try:
-            n = int(choice)
-        except ValueError:
-            self._print(RED + "  Not a number." + RESET)
-            input("  Press Enter to continue...")
-            return
-        if not 1 <= n <= len(index_to_path):
-            self._print(RED + "  Out of range." + RESET)
-            input("  Press Enter to continue...")
-            return
-        self.map_path = index_to_path[n - 1]
+        # - maps = self._all_maps() ; si vide → afficher message en rouge et input("Press Enter").
+        # - Grouper par parent folder (catégorie) ; "(root)" pour les fichiers à la racine.
+        # - Afficher CLEAR + "Available maps" puis chaque catégorie en jaune
+        #   et chaque path numéroté (index global).
+        # - Demander "Pick a number" ; "0"/vide → cancel.
+        # - Convertir en int (catch ValueError → message rouge).
+        # - Vérifier 1 <= n <= len ; sinon "Out of range".
+        # - self.map_path = index_to_path[n - 1].
+        raise NotImplementedError("À implémenter")
 
     def _switch_render(self) -> None:
-        self.render_mode = "pygame" if self.render_mode == "terminal" else "terminal"
+        # - self.render_mode = "pygame" si actuellement "terminal" sinon "terminal".
+        raise NotImplementedError("À implémenter")
 
     def _launch(self) -> None:
-        if self.map_path is None:
-            self._print(RED + "  No map selected." + RESET)
-            input("  Press Enter to continue...")
-            return
-        try:
-            graph = MapParser().parse_file(self.map_path)
-        except MapParseError as exc:
-            self._print(RED + f"  map error: {exc}" + RESET)
-            input("  Press Enter to continue...")
-            return
-        except OSError as exc:
-            self._print(RED + f"  cannot read map: {exc}" + RESET)
-            input("  Press Enter to continue...")
-            return
-
-        simulator = Simulator(graph)
-        try:
-            paths = simulator.prepare()
-            reports = simulator.run()
-        except RuntimeError as exc:
-            self._print(RED + f"  simulation error: {exc}" + RESET)
-            input("  Press Enter to continue...")
-            return
-
-        if self.render_mode == "pygame":
-            self._launch_pygame(graph, simulator, paths, reports)
-        else:
-            self._launch_terminal(simulator, paths, reports)
+        # - Si self.map_path None → message rouge "No map selected", input.
+        # - graph = MapParser().parse_file(self.map_path):
+        #     - catch MapParseError / OSError → message rouge + input.
+        # - simulator = Simulator(graph).
+        # - paths = simulator.prepare() ; reports = simulator.run().
+        #     - catch RuntimeError → message rouge + input.
+        # - Si render_mode == "pygame" → self._launch_pygame(...).
+        # - Sinon self._launch_terminal(...).
+        raise NotImplementedError("À implémenter")
 
     def _launch_terminal(
         self,
@@ -182,10 +120,11 @@ class Menu:
         paths: List[List[Zone]],
         reports: List[TurnReport],
     ) -> None:
-        self._print(CLEAR)
-        view = TerminalView(simulator, use_colour=self.use_colour)
-        view.render_full(paths, reports, spec_only=self.spec_only)
-        input("\n  Press Enter to return to the menu...")
+        # - _print(CLEAR).
+        # - view = TerminalView(simulator, use_colour=self.use_colour).
+        # - view.render_full(paths, reports, spec_only=self.spec_only).
+        # - input("Press Enter to return to the menu...").
+        raise NotImplementedError("À implémenter")
 
     def _launch_pygame(
         self,
@@ -194,50 +133,23 @@ class Menu:
         paths: List[List[Zone]],
         reports: List[TurnReport],
     ) -> None:
-        try:
-            from flyin.pygame_view import PygameUnavailableError, PygameView
-        except ImportError as exc:
-            self._print(RED + f"  pygame view unavailable: {exc}" + RESET)
-            input("  Press Enter to continue...")
-            return
-        try:
-            view = PygameView(
-                graph,
-                simulator,
-                paths,
-                reports,
-                title=f"Fly-in — {self.map_path.name if self.map_path else ''}",
-            )
-            view.run()
-        except PygameUnavailableError as exc:
-            self._print(RED + f"  {exc}" + RESET)
-            input("  Press Enter to continue...")
+        # - Import dynamique de flyin.pygame_view (catch ImportError → message rouge + input).
+        # - Créer PygameView(graph, simulator, paths, reports, title=...) puis view.run().
+        # - Catch PygameUnavailableError → message rouge + input.
+        raise NotImplementedError("À implémenter")
 
     # ---------------------------------------------------------------- loop
 
     def run(self) -> None:
-        """Start the interactive menu loop. Returns when the user quits."""
-        while True:
-            self._print_header()
-            self._print_state()
-            self._print_menu()
-            try:
-                choice = input("  : ").strip()
-            except (EOFError, KeyboardInterrupt):
-                self._print(CLEAR + "  Goodbye :)")
-                return
-
-            if choice == "1":
-                self._launch()
-            elif choice == "2":
-                self._choose_map()
-            elif choice == "3":
-                self._switch_render()
-            elif choice == "4":
-                self.use_colour = not self.use_colour
-            elif choice == "5":
-                self.spec_only = not self.spec_only
-            elif choice == "6":
-                self._print(CLEAR + "  Goodbye :)")
-                return
-            # any other input just refreshes the menu
+        # - Boucle infinie:
+        #     - _print_header() ; _print_state() ; _print_menu().
+        #     - choice = input("  : ") (catch EOFError/KeyboardInterrupt → quitter avec "Goodbye").
+        #     - Dispatch:
+        #         "1" → _launch
+        #         "2" → _choose_map
+        #         "3" → _switch_render
+        #         "4" → toggle use_colour
+        #         "5" → toggle spec_only
+        #         "6" → _print "Goodbye" + return.
+        #     - autre → refresh boucle.
+        raise NotImplementedError("À implémenter")
