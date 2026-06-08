@@ -5,21 +5,87 @@ path each drone follows) with a turn-by-turn *simulator* (which respects
 zone capacities, connection capacities, and the 2-turn transit rule for
 restricted zones).
 
-The simulator emits one :class:`TurnReport` per turn so the visualization
-layer can render coloured terminal output while staying decoupled from the
-movement logic.
+The per-drone state (:class:`Drone`) lives here because it is only ever
+manipulated by the simulator. Each turn the simulator emits one
+:class:`TurnReport` so the visualization layer can render the run while
+staying fully decoupled from the movement logic.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
-from flyin.connection import Connection
-from flyin.drone import Drone
 from flyin.graph import Graph
+from flyin.network import Connection, Zone, ZoneType
 from flyin.pathfinder import PathFinder
-from flyin.zone import Zone, ZoneType
+
+
+# ----------------------------------------------------------------- drone state
+
+
+class Drone:
+    """A single drone navigating the network.
+
+    A drone has a stable integer identifier (D1, D2, ...), a current zone,
+    and an optional in-flight transit when crossing a restricted zone (which
+    requires 2 turns: 1 spent on the connection, 1 to arrive).
+    """
+
+    def __init__(
+        self, drone_id: int, start: Zone, path: Optional[List[Zone]] = None
+    ) -> None:
+        self.drone_id = drone_id
+        self.position: Zone = start
+        self.path: List[Zone] = path if path is not None else [start]
+        self.path_index: int = 0
+        self.transit_connection: Optional[Connection] = None
+        self.transit_target: Optional[Zone] = None
+        self.delivered: bool = False
+
+    @property
+    def label(self) -> str:
+        return f"D{self.drone_id}"
+
+    @property
+    def is_in_transit(self) -> bool:
+        return self.transit_connection is not None
+
+    def assign_path(self, path: List[Zone]) -> None:
+        if not path:
+            raise ValueError("path must contain at least the start")
+        self.path = path
+        self.path_index = 0
+        self.position = path[0]
+
+    def next_zone(self) -> Optional[Zone]:
+        if self.path_index + 1 >= len(self.path):
+            return None
+        return self.path[self.path_index + 1]
+
+    def start_transit(self, connection: Connection, target: Zone) -> None:
+        self.transit_connection = connection
+        self.transit_target = target
+
+    def finish_transit(self) -> None:
+        if self.transit_target is None:
+            raise RuntimeError("no pending transit")
+        self.position = self.transit_target
+        self.path_index += 1
+        self.transit_connection = None
+        self.transit_target = None
+
+    def step_to(self, zone: Zone) -> None:
+        self.position = zone
+        self.path_index += 1
+
+    def __repr__(self) -> str:
+        if self.is_in_transit and self.transit_connection is not None:
+            return f"{self.label}@transit({self.transit_connection.display_name()})"
+        return f"{self.label}@{self.position.name}"
+
+
+# ---------------------------------------------------------------- turn reports
 
 
 @dataclass
@@ -30,8 +96,7 @@ class MoveRecord:
     destination: str  # zone name (arrival) or connection display name (transit)
 
     def render(self) -> str:
-        # - Retourner f"{self.drone_label}-{self.destination}" (format spec).
-        raise NotImplementedError("À implémenter")
+        return f"{self.drone_label}-{self.destination}"
 
 
 @dataclass
@@ -42,27 +107,35 @@ class TurnReport:
     moves: List[MoveRecord] = field(default_factory=list)
 
     def render(self) -> str:
-        # - Retourner " ".join(move.render() for move in self.moves).
-        raise NotImplementedError("À implémenter")
+        return " ".join(move.render() for move in self.moves)
+
+
+# -------------------------------------------------------------------- scheduler
 
 
 class PathScheduler:
     """Assign drones to candidate paths to minimize makespan."""
 
     def __init__(self, paths: List[List[Zone]]) -> None:
-        # - Si paths vide → ValueError("scheduler needs at least one path").
-        # - self.paths = paths.
-        raise NotImplementedError("À implémenter")
+        if not paths:
+            raise ValueError("scheduler needs at least one path")
+        self.paths = paths
 
     def assign(self, nb_drones: int) -> List[int]:
-        # - costs = [PathFinder.path_cost(p) for p in self.paths].
-        # - counts = [0] * len(paths) — nombre de drones déjà placés sur chaque path.
-        # - assignment = [].
-        # - Pour chaque drone (nb_drones fois):
-        #     - Choisir l'index i qui minimise (costs[i] + counts[i]) (greedy makespan).
-        #     - assignment.append(best) ; counts[best] += 1.
-        # - Retourner assignment.
-        raise NotImplementedError("À implémenter")
+        costs = [PathFinder.path_cost(p) for p in self.paths]
+        counts = [0] * len(self.paths)
+        assignment: List[int] = []
+        for _ in range(nb_drones):
+            best = min(
+                range(len(self.paths)),
+                key=lambda i: costs[i] + counts[i],
+            )
+            assignment.append(best)
+            counts[best] += 1
+        return assignment
+
+
+# -------------------------------------------------------------------- simulator
 
 
 class Simulator:
@@ -71,144 +144,123 @@ class Simulator:
     SAFETY_TURN_LIMIT = 10_000
 
     def __init__(self, graph: Graph) -> None:
-        # - self.graph = graph.
-        # - self.drones: List[Drone] = [].
-        # - self.turn_reports: List[TurnReport] = [].
-        raise NotImplementedError("À implémenter")
+        self.graph = graph
+        self.drones: List[Drone] = []
+        self.turn_reports: List[TurnReport] = []
 
     # ----------------------------------------------------------------- setup
 
     def prepare(self) -> List[List[Zone]]:
-        # - finder = PathFinder(self.graph).
-        # - budget = min(self.graph.nb_drones, 16) — limite k pour Yen.
-        # - paths = finder.find_k_shortest_paths(budget).
-        # - Si paths vide → RuntimeError("no path from start to end").
-        # - scheduler = PathScheduler(paths).
-        # - assignment = scheduler.assign(self.graph.nb_drones).
-        # - self.drones = [] ; pour drone_id de 1 à nb_drones:
-        #     - path_index = assignment[drone_id - 1].
-        #     - Créer Drone(drone_id, start, list(paths[path_index])).
-        #     - Append à self.drones.
-        # - Retourner paths.
-        raise NotImplementedError("À implémenter")
+        finder = PathFinder(self.graph)
+        paths = finder.find_candidate_paths(self.graph.nb_drones)
+        if not paths:
+            raise RuntimeError("no path from start to end")
+        scheduler = PathScheduler(paths)
+        assignment = scheduler.assign(self.graph.nb_drones)
+        self.drones = []
+        for drone_id in range(1, self.graph.nb_drones + 1):
+            path = list(paths[assignment[drone_id - 1]])
+            self.drones.append(Drone(drone_id, self.graph.start, path))
+        return paths
 
     # --------------------------------------------------------------- mainloop
 
     def run(self) -> List[TurnReport]:
-        # - Si self.drones vide → self.prepare().
-        # - self.turn_reports = [] ; turn = 0.
-        # - Tant que not self._all_delivered():
-        #     - turn += 1.
-        #     - Si turn > SAFETY_TURN_LIMIT → RuntimeError("deadlock").
-        #     - report = self._execute_turn(turn) ; append.
-        # - Retourner self.turn_reports.
-        raise NotImplementedError("À implémenter")
-
-    # --------------------------------------------------------------- helpers
+        if not self.drones:
+            self.prepare()
+        self.turn_reports = []
+        turn = 0
+        while not self._all_delivered():
+            turn += 1
+            if turn > self.SAFETY_TURN_LIMIT:
+                raise RuntimeError("deadlock: turn limit exceeded")
+            report = self._execute_turn(turn)
+            self.turn_reports.append(report)
+        return self.turn_reports
 
     def _all_delivered(self) -> bool:
-        # - Retourner all(drone.delivered for drone in self.drones).
-        raise NotImplementedError("À implémenter")
+        return all(drone.delivered for drone in self.drones)
+
+    # --------------------------------------------------------------- one turn
 
     def _execute_turn(self, turn: int) -> TurnReport:
-        # Stratégie multi-passes:
-        # - report = TurnReport(turn=turn).
-        # - Calculer zone_load (snapshot occupation AVANT moves, drones in-transit NON comptés).
-        # - Init zone_arrivals = {}, connection_usage = {}, pending_landings = {}.
-        # - Remplir pending_landings depuis les drones déjà en transit.
-        #
-        # Phase A — landings:
-        # - just_landed = set().
-        # - Pour chaque drone en transit non délivré:
-        #     - target = drone.transit_target ; vérifier capacité (sinon RuntimeError scheduler bug).
-        #     - zone_arrivals[target] += 1 ; pending_landings[target] -= 1.
-        #     - drone.finish_transit() ; just_landed.add(drone.drone_id).
-        #     - Si position == end → delivered = True.
-        #     - report.moves.append(MoveRecord(label, position.name)).
-        #
-        # Phase B — collect intents:
-        # - intents = {} (drone -> (next_zone, connection, kind)).
-        # - Pour chaque drone non délivré, non en transit, pas just_landed:
-        #     - next_zone = drone.next_zone() ; si None → marquer delivered si à end.
-        #     - connection = graph.get_connection(position, next_zone).
-        #     - kind = "transit" si next_zone.zone_type == RESTRICTED sinon "step".
-        #     - intents[drone] = (next_zone, connection, kind).
-        # - active = dict(intents).
-        # - self._prune_until_feasible(active, zone_load, zone_arrivals, connection_usage, pending_landings).
-        # - self._commit_intents(active, report).
-        # - Retourner report.
-        raise NotImplementedError("À implémenter")
+        report = TurnReport(turn=turn)
 
-    # ------------------------------------------------- intent resolution
+        # Phase A — mandatory landings (restricted = 2-turn transit).
+        just_landed: Set[int] = set()
+        for drone in self.drones:
+            if drone.delivered or not drone.is_in_transit:
+                continue
+            drone.finish_transit()
+            if drone.position == self.graph.end:
+                drone.delivered = True
+            report.moves.append(MoveRecord(drone.label, drone.position.name))
+            just_landed.add(drone.drone_id)
 
-    def _prune_until_feasible(
-        self,
-        active: Dict[Drone, Tuple[Zone, Connection, str]],
-        zone_load: Dict[str, int],
-        zone_arrivals: Dict[str, int],
-        connection_usage: Dict[Tuple[str, str], int],
-        pending_landings: Dict[str, int],
-    ) -> None:
-        # - Tant que active n'est pas vide:
-        #     - violator = self._find_violator(active, ...).
-        #     - Si None → return (toutes les contraintes tiennent).
-        #     - Sinon del active[violator] (drop).
-        raise NotImplementedError("À implémenter")
+        # Phase B — greedy moves for the remaining drones.
+        self._plan_moves(report, just_landed)
+        return report
 
-    def _find_violator(
-        self,
-        active: Dict[Drone, Tuple[Zone, Connection, str]],
-        zone_load: Dict[str, int],
-        zone_arrivals: Dict[str, int],
-        connection_usage: Dict[Tuple[str, str], int],
-        pending_landings: Dict[str, int],
-    ) -> Optional[Drone]:
-        # Heuristique: dropper en priorité ceux dont le départ ne libère pas de capacité tendue.
-        # - Construire leaving/entering/edge_usage/new_landings depuis active.
-        # - Pour chaque connexion: si usage cumulé > max_link_capacity → identifier les offenders
-        #   (drones utilisant cette connexion) et retourner _pick_drop(offenders, zone_load).
-        # - Pour chaque zone: si load + arrivals + entering - leaving > capacity →
-        #   offenders = drones qui font "step" vers cette zone → _pick_drop.
-        # - Pour chaque zone: si pending_landings + new_landings > capacity →
-        #   offenders = drones qui font "transit" vers cette zone → _pick_drop.
-        # - Sinon → None.
-        raise NotImplementedError("À implémenter")
+    def _plan_moves(self, report: TurnReport, just_landed: Set[int]) -> None:
+        # Current zone occupancy before any move this turn (transit drones
+        # occupy a connection, not a zone, so they are excluded).
+        occupancy: Dict[str, int] = {}
+        for drone in self.drones:
+            if drone.delivered or drone.is_in_transit:
+                continue
+            occupancy[drone.position.name] = (
+                occupancy.get(drone.position.name, 0) + 1
+            )
 
-    @staticmethod
-    def _pick_drop(
-        offenders: List[Drone], zone_load: Dict[str, int]
-    ) -> Drone:
-        # - Pour chaque drone offender, calculer slack = capacity_for_scheduling - zone_load.
-        # - Retourner le drone avec max((slack, drone_id)) → grosse slack = départ "inutile".
-        raise NotImplementedError("À implémenter")
+        leaving: Dict[str, int] = {}
+        arriving: Dict[str, int] = {}
+        edge_use: Dict[Tuple[str, str], int] = {}
 
-    def _commit_intents(
-        self,
-        active: Dict[Drone, Tuple[Zone, Connection, str]],
-        report: TurnReport,
-    ) -> None:
-        # - Pour chaque drone trié par drone_id:
-        #     - (target, connection, kind) = active[drone].
-        #     - Si kind == "transit":
-        #         - drone.start_transit(connection, target).
-        #         - report.moves.append(MoveRecord(label, connection.display_name())).
-        #     - Sinon (step):
-        #         - drone.step_to(target).
-        #         - Si target == end → delivered = True.
-        #         - report.moves.append(MoveRecord(label, target.name)).
-        raise NotImplementedError("À implémenter")
+        for drone in sorted(self.drones, key=lambda d: d.drone_id):
+            if drone.delivered or drone.is_in_transit:
+                continue
+            if drone.drone_id in just_landed:
+                continue
+            target = drone.next_zone()
+            if target is None:
+                continue
+
+            connection = self.graph.get_connection(
+                drone.position.name, target.name
+            )
+            ek = connection.endpoints
+            if edge_use.get(ek, 0) + 1 > connection.max_link_capacity:
+                continue  # connection saturated this turn → wait
+
+            staying = occupancy.get(target.name, 0) - leaving.get(target.name, 0)
+            free = target.zone_capacity() - staying - arriving.get(target.name, 0)
+            if free <= 0:
+                continue  # destination full → wait
+
+            edge_use[ek] = edge_use.get(ek, 0) + 1
+            leaving[drone.position.name] = leaving.get(drone.position.name, 0) + 1
+            arriving[target.name] = arriving.get(target.name, 0) + 1
+
+            if target.zone_type is ZoneType.RESTRICTED:
+                drone.start_transit(connection, target)
+                report.moves.append(
+                    MoveRecord(drone.label, connection.display_name())
+                )
+            else:
+                drone.step_to(target)
+                if target == self.graph.end:
+                    drone.delivered = True
+                report.moves.append(MoveRecord(drone.label, target.name))
 
     # ---------------------------------------------------------------- stats
 
     def total_turns(self) -> int:
-        # - Retourner len(self.turn_reports).
-        raise NotImplementedError("À implémenter")
+        return len(self.turn_reports)
 
     def total_path_cost(self) -> int:
-        # - Retourner sum(PathFinder.path_cost(d.path) for d in self.drones).
-        raise NotImplementedError("À implémenter")
+        return sum(PathFinder.path_cost(d.path) for d in self.drones)
 
     def average_turns_per_drone(self) -> float:
-        # - Si self.drones vide → 0.0.
-        # - Sinon self.total_path_cost() / len(self.drones).
-        raise NotImplementedError("À implémenter")
+        if not self.drones:
+            return 0.0
+        return self.total_path_cost() / len(self.drones)

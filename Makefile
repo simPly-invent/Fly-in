@@ -2,14 +2,12 @@ PYTHON := python3
 PIP    := $(PYTHON) -m pip
 MAP    := maps/easy/01_linear_path.txt
 
-.PHONY: install run debug clean lint lint-strict help menu pygame
+.PHONY: install run debug clean lint lint-strict help
 
 help:
 	@echo "Fly-in -- available targets:"
 	@echo "  make install        Install project dependencies"
 	@echo "  make run MAP=...    Run the simulation on a map file (terminal)"
-	@echo "  make pygame MAP=... Run the simulation in the pygame window"
-	@echo "  make menu           Launch the interactive menu"
 	@echo "  make debug MAP=...  Run the simulation under pdb"
 	@echo "  make clean          Remove caches and bytecode"
 	@echo "  make lint           flake8 + mypy with mandatory flags"
@@ -21,12 +19,6 @@ install:
 
 run:
 	$(PYTHON) main.py $(MAP)
-
-pygame:
-	$(PYTHON) main.py $(MAP) --pygame
-
-menu:
-	$(PYTHON) main.py --menu
 
 debug:
 	$(PYTHON) -m pdb main.py $(MAP)

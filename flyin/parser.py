@@ -22,19 +22,19 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from flyin.connection import Connection
 from flyin.graph import Graph
-from flyin.zone import Zone, ZoneType
+from flyin.network import Connection, Zone, ZoneType
 
 
 class MapParseError(Exception):
     """Raised when a map file cannot be parsed or fails validation."""
 
     def __init__(self, message: str, line_no: Optional[int] = None) -> None:
-        # - Si line_no est fourni → super().__init__(f"line {line_no}: {message}").
-        # - Sinon → super().__init__(message).
-        # - Stocker self.line_no = line_no.
-        raise NotImplementedError("À implémenter")
+        if line_no is not None:
+            super().__init__(f"line {line_no}: {message}")
+        else:
+            super().__init__(message)
+        self.line_no = line_no
 
 
 _NAME_RE = re.compile(r"^[^\s\-]+$")
@@ -45,155 +45,235 @@ class MapParser:
     """Stateful parser that builds a Graph from a map file."""
 
     def __init__(self) -> None:
-        # - Initialiser:
-        #     self._nb_drones: Optional[int] = None
-        #     self._graph: Optional[Graph] = None
-        #     self._pending_zones: List[Tuple[int, str, List[str]]] = []
-        #     self._pending_connections: List[Tuple[int, str, str, str]] = []
-        raise NotImplementedError("À implémenter")
+        self._nb_drones: Optional[int] = None
+        self._graph: Optional[Graph] = None
+        self._pending_zones: List[Tuple[int, str, List[str]]] = []
+        self._pending_connections: List[Tuple[int, str, str, str]] = []
 
     # --------------------------------------------------------------- entrypoint
 
     def parse_file(self, path: Union[str, Path]) -> Graph:
-        # - file_path = Path(path).
-        # - Ouvrir en lecture utf-8 dans un try/except OSError:
-        #     - Si OSError → lever MapParseError(f"cannot read map file {file_path!s}: {exc}").
-        # - Lire tout le contenu, puis retourner self.parse_text(content).
-        raise NotImplementedError("À implémenter")
+        file_path = Path(path)
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise MapParseError(
+                f"cannot read map file {file_path!s}: {exc}"
+            ) from exc
+        return self.parse_text(content)
 
     def parse_text(self, text: str) -> Graph:
-        # - self._reset().
-        # - Pour chaque ligne (enumerate à partir de 1):
-        #     - line = self._strip_comment(raw).strip().
-        #     - Si line vide → continue.
-        #     - Sinon self._dispatch(line_no, line).
-        # - Si self._nb_drones is None → MapParseError("missing 'nb_drones:' directive").
-        # - self._graph = Graph(self._nb_drones).
-        # - self._build_zones() puis self._build_connections().
-        # - self._graph.validate().
-        # - Retourner self._graph.
-        raise NotImplementedError("À implémenter")
+        self._reset()
+        for line_no, raw in enumerate(text.splitlines(), start=1):
+            line = self._strip_comment(raw).strip()
+            if not line:
+                continue
+            self._dispatch(line_no, line)
+        if self._nb_drones is None:
+            raise MapParseError("missing 'nb_drones:' directive")
+        self._graph = Graph(self._nb_drones)
+        self._build_zones()
+        self._build_connections()
+        self._graph.validate()
+        return self._graph
 
     # ------------------------------------------------------------------ helpers
 
     def _reset(self) -> None:
-        # - Remettre à zéro les 4 attributs internes (nb_drones, graph, pending_*).
-        raise NotImplementedError("À implémenter")
+        self._nb_drones = None
+        self._graph = None
+        self._pending_zones = []
+        self._pending_connections = []
 
     @staticmethod
     def _strip_comment(line: str) -> str:
-        # - idx = line.find("#").
-        # - Si idx == -1 → retourner line.
-        # - Sinon retourner line[:idx] (tout ce qui précède le #).
-        raise NotImplementedError("À implémenter")
+        idx = line.find("#")
+        if idx == -1:
+            return line
+        return line[:idx]
 
     def _dispatch(self, line_no: int, line: str) -> None:
-        # - Selon le préfixe de line, appeler le bon handler:
-        #     - "nb_drones:"  → self._parse_nb_drones.
-        #     - "start_hub:"  → self._queue_zone(prefix=..., role="start").
-        #     - "end_hub:"    → self._queue_zone(prefix=..., role="end").
-        #     - "hub:"        → self._queue_zone(prefix=..., role="hub").
-        #     - "connection:" → self._queue_connection.
-        # - Sinon → MapParseError(f"unrecognized directive: {line!r}", line_no).
-        raise NotImplementedError("À implémenter")
+        if line.startswith("nb_drones:"):
+            self._parse_nb_drones(line_no, line)
+        elif line.startswith("start_hub:"):
+            self._queue_zone(line_no, line, prefix="start_hub:", role="start")
+        elif line.startswith("end_hub:"):
+            self._queue_zone(line_no, line, prefix="end_hub:", role="end")
+        elif line.startswith("hub:"):
+            self._queue_zone(line_no, line, prefix="hub:", role="hub")
+        elif line.startswith("connection:"):
+            self._queue_connection(line_no, line)
+        else:
+            raise MapParseError(f"unrecognized directive: {line!r}", line_no)
 
     # ------------------------------------------------------------- nb_drones
 
     def _parse_nb_drones(self, line_no: int, line: str) -> None:
-        # - Si self._nb_drones déjà set → MapParseError("duplicate 'nb_drones:'").
-        # - payload = ligne sans le préfixe "nb_drones:" (strip).
-        # - Si payload vide → MapParseError("nb_drones is missing a value").
-        # - Convertir en int; sur ValueError → MapParseError(...) chaîné.
-        # - Si value <= 0 → MapParseError("must be positive").
-        # - self._nb_drones = value.
-        raise NotImplementedError("À implémenter")
+        if self._nb_drones is not None:
+            raise MapParseError("duplicate 'nb_drones:'", line_no)
+        payload = line[len("nb_drones:"):].strip()
+        if not payload:
+            raise MapParseError("nb_drones is missing a value", line_no)
+        try:
+            value = int(payload)
+        except ValueError as exc:
+            raise MapParseError(
+                f"nb_drones is not an integer: {payload!r}", line_no
+            ) from exc
+        if value <= 0:
+            raise MapParseError("nb_drones must be positive", line_no)
+        self._nb_drones = value
 
     # ------------------------------------------------------------------ zones
 
-    def _queue_zone(self, line_no: int, line: str, prefix: str, role: str) -> None:
-        # - payload = ligne sans le prefix (strip).
-        # - (tokens, metadata) = self._split_metadata(line_no, payload).
-        # - Si len(tokens) != 3 → MapParseError("expects '<name> <x> <y>'").
-        # - name, x_raw, y_raw = tokens.
-        # - self._validate_name(line_no, name).
-        # - Convertir x_raw/y_raw en int; sur ValueError → MapParseError(...).
-        # - Append dans self._pending_zones:
-        #       (line_no, role, [name, str(x), str(y), *metadata]).
-        raise NotImplementedError("À implémenter")
+    def _queue_zone(
+        self, line_no: int, line: str, prefix: str, role: str
+    ) -> None:
+        payload = line[len(prefix):].strip()
+        tokens, metadata = self._split_metadata(line_no, payload)
+        if len(tokens) != 3:
+            raise MapParseError(
+                f"{prefix} expects '<name> <x> <y>'", line_no
+            )
+        name, x_raw, y_raw = tokens
+        self._validate_name(line_no, name)
+        try:
+            int(x_raw)
+            int(y_raw)
+        except ValueError as exc:
+            raise MapParseError(
+                f"zone coordinates must be integers: {x_raw!r} {y_raw!r}",
+                line_no,
+            ) from exc
+        self._pending_zones.append(
+            (line_no, role, [name, x_raw, y_raw, *metadata])
+        )
 
     def _build_zones(self) -> None:
-        # - Pour chaque (line_no, role, fields) dans self._pending_zones:
-        #     - name = fields[0] ; x = int(fields[1]) ; y = int(fields[2]).
-        #     - meta = self._metadata_dict(line_no, fields[3:]).
-        #     - zone_type = ZoneType.NORMAL (défaut).
-        #     - Si "zone" dans meta → ZoneType.from_string(meta["zone"]) (catch ValueError).
-        #     - color = meta.get("color").
-        #     - max_drones = self._parse_positive_int(line_no, meta.get("max_drones"),
-        #                                             default=1, key="max_drones").
-        #     - Créer Zone(...) avec is_start/is_end selon role.
-        #     - Appeler self._graph.add_zone(zone) (catch ValueError → MapParseError).
-        raise NotImplementedError("À implémenter")
+        assert self._graph is not None
+        for line_no, role, fields in self._pending_zones:
+            name = fields[0]
+            x = int(fields[1])
+            y = int(fields[2])
+            meta = self._metadata_dict(line_no, fields[3:])
+            zone_type = ZoneType.NORMAL
+            if "zone" in meta:
+                try:
+                    zone_type = ZoneType.from_string(meta["zone"])
+                except ValueError as exc:
+                    raise MapParseError(str(exc), line_no) from exc
+            color = meta.get("color")
+            max_drones = self._parse_positive_int(
+                line_no, meta.get("max_drones"), default=1, key="max_drones"
+            )
+            zone = Zone(
+                name,
+                x,
+                y,
+                zone_type=zone_type,
+                color=color,
+                max_drones=max_drones,
+                is_start=(role == "start"),
+                is_end=(role == "end"),
+            )
+            try:
+                self._graph.add_zone(zone)
+            except ValueError as exc:
+                raise MapParseError(str(exc), line_no) from exc
 
     # ------------------------------------------------------------- connections
 
     def _queue_connection(self, line_no: int, line: str) -> None:
-        # - payload = ligne sans "connection:" (strip).
-        # - (tokens, metadata) = self._split_metadata(line_no, payload).
-        # - Si len(tokens) != 1 → MapParseError("expects '<zone1>-<zone2>'").
-        # - endpoints = tokens[0] ; parts = endpoints.split("-").
-        # - Si len(parts) != 2 ou parties vides → MapParseError("invalid syntax").
-        # - name_a, name_b = parts.
-        # - _validate_name sur les deux.
-        # - Si name_a == name_b → MapParseError("cannot loop on itself").
-        # - Append dans self._pending_connections:
-        #       (line_no, name_a, name_b, " ".join(metadata)).
-        raise NotImplementedError("À implémenter")
+        payload = line[len("connection:"):].strip()
+        tokens, metadata = self._split_metadata(line_no, payload)
+        if len(tokens) != 1:
+            raise MapParseError(
+                "connection expects '<zone1>-<zone2>'", line_no
+            )
+        parts = tokens[0].split("-")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise MapParseError(
+                "invalid connection syntax (expected 'zone1-zone2')", line_no
+            )
+        name_a, name_b = parts
+        self._validate_name(line_no, name_a)
+        self._validate_name(line_no, name_b)
+        if name_a == name_b:
+            raise MapParseError("a connection cannot loop on itself", line_no)
+        self._pending_connections.append(
+            (line_no, name_a, name_b, " ".join(metadata))
+        )
 
     def _build_connections(self) -> None:
-        # - Pour chaque (line_no, name_a, name_b, meta_str) dans self._pending_connections:
-        #     - Vérifier que has_zone(name_a) et has_zone(name_b) sinon MapParseError.
-        #     - zone_a/zone_b = self._graph.get_zone(...).
-        #     - meta_tokens = meta_str.split() si non vide.
-        #     - meta = self._metadata_dict(line_no, meta_tokens).
-        #     - max_link_capacity = self._parse_positive_int(meta.get("max_link_capacity"),
-        #                                                    default=1, key="max_link_capacity").
-        #     - Créer Connection(zone_a, zone_b, max_link_capacity).
-        #     - self._graph.add_connection(...) (catch ValueError → MapParseError).
-        raise NotImplementedError("À implémenter")
+        assert self._graph is not None
+        for line_no, name_a, name_b, meta_str in self._pending_connections:
+            for endpoint in (name_a, name_b):
+                if not self._graph.has_zone(endpoint):
+                    raise MapParseError(
+                        f"connection references unknown zone {endpoint!r}",
+                        line_no,
+                    )
+            zone_a = self._graph.get_zone(name_a)
+            zone_b = self._graph.get_zone(name_b)
+            meta_tokens = meta_str.split() if meta_str else []
+            meta = self._metadata_dict(line_no, meta_tokens)
+            max_link_capacity = self._parse_positive_int(
+                line_no,
+                meta.get("max_link_capacity"),
+                default=1,
+                key="max_link_capacity",
+            )
+            connection = Connection(zone_a, zone_b, max_link_capacity)
+            try:
+                self._graph.add_connection(connection)
+            except ValueError as exc:
+                raise MapParseError(str(exc), line_no) from exc
 
     # ------------------------------------------------------------------ tools
 
     @staticmethod
     def _validate_name(line_no: int, name: str) -> None:
-        # - Si name vide → MapParseError("empty zone name").
-        # - Si _NAME_RE ne match pas → MapParseError("invalid zone name ... no spaces/dashes").
-        raise NotImplementedError("À implémenter")
+        if not name:
+            raise MapParseError("empty zone name", line_no)
+        if not _NAME_RE.match(name):
+            raise MapParseError(
+                f"invalid zone name {name!r} (no spaces or dashes allowed)",
+                line_no,
+            )
 
     @staticmethod
-    def _split_metadata(line_no: int, payload: str) -> Tuple[List[str], List[str]]:
-        # - open_idx = payload.find("[").
-        # - Si open_idx == -1 → retourner (payload.split(), []).
-        # - close_idx = payload.find("]", open_idx).
-        # - Si close_idx == -1 → MapParseError("unterminated metadata block").
-        # - Si un autre "[" après open_idx → MapParseError("nested metadata blocks").
-        # - head = payload[:open_idx].strip()
-        # - body = payload[open_idx+1:close_idx].strip()
-        # - tail = payload[close_idx+1:].strip()
-        # - Si tail non vide → MapParseError("unexpected text after metadata block").
-        # - Retourner (head.split(), body.split()).
-        raise NotImplementedError("À implémenter")
+    def _split_metadata(
+        line_no: int, payload: str
+    ) -> Tuple[List[str], List[str]]:
+        open_idx = payload.find("[")
+        if open_idx == -1:
+            return (payload.split(), [])
+        close_idx = payload.find("]", open_idx)
+        if close_idx == -1:
+            raise MapParseError("unterminated metadata block", line_no)
+        if payload.find("[", open_idx + 1) != -1:
+            raise MapParseError("nested metadata blocks", line_no)
+        head = payload[:open_idx].strip()
+        body = payload[open_idx + 1:close_idx].strip()
+        tail = payload[close_idx + 1:].strip()
+        if tail:
+            raise MapParseError("unexpected text after metadata block", line_no)
+        return (head.split(), body.split())
 
     @staticmethod
     def _metadata_dict(line_no: int, tokens: List[str]) -> Dict[str, str]:
-        # - result: Dict[str, str] = {}.
-        # - Pour chaque token:
-        #     - match = _METADATA_TOKEN_RE.match(token).
-        #     - Si pas de match → MapParseError("expected 'key=value'").
-        #     - key, value = groupes 1/2.
-        #     - Si key déjà dans result → MapParseError("duplicate metadata key").
-        #     - result[key] = value.
-        # - Retourner result.
-        raise NotImplementedError("À implémenter")
+        result: Dict[str, str] = {}
+        for token in tokens:
+            match = _METADATA_TOKEN_RE.match(token)
+            if match is None:
+                raise MapParseError(
+                    f"expected 'key=value' metadata, got {token!r}", line_no
+                )
+            key, value = match.group(1), match.group(2)
+            if key in result:
+                raise MapParseError(f"duplicate metadata key {key!r}", line_no)
+            result[key] = value
+        return result
 
     @staticmethod
     def _parse_positive_int(
@@ -202,8 +282,14 @@ class MapParser:
         default: int,
         key: str,
     ) -> int:
-        # - Si raw est None → retourner default.
-        # - Convertir en int (catch ValueError → MapParseError chaîné).
-        # - Si value <= 0 → MapParseError(f"{key} must be a positive integer").
-        # - Retourner value.
-        raise NotImplementedError("À implémenter")
+        if raw is None:
+            return default
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise MapParseError(
+                f"{key} must be an integer, got {raw!r}", line_no
+            ) from exc
+        if value <= 0:
+            raise MapParseError(f"{key} must be a positive integer", line_no)
+        return value

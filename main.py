@@ -1,10 +1,9 @@
 """Fly-in: drone routing CLI entry point.
 
 Usage:
-    python main.py                       # interactive menu
-    python main.py <map_file>            # run on the given map (terminal)
-    python main.py <map_file> --pygame   # run with the pygame view
-    python main.py <map_file> --no-color --spec-only   # plain spec output
+    python main.py <map_file>                       # coloured terminal run
+    python main.py <map_file> --no-color            # plain (no ANSI)
+    python main.py <map_file> --spec-only           # spec-format lines only
 """
 
 from __future__ import annotations
@@ -14,54 +13,55 @@ import sys
 from typing import List, Optional
 
 from flyin.parser import MapParseError, MapParser
-from flyin.simulator import Simulator, TurnReport
-from flyin.terminal_view import TerminalView
-from flyin.zone import Zone
+from flyin.simulator import Simulator
+from flyin.view import TerminalView
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    # - Créer un argparse.ArgumentParser(prog="fly-in", description=...).
-    # - Ajouter:
-    #     map_file (positional, nargs="?")
-    #     --menu (store_true)
-    #     --pygame (store_true)
-    #     --no-color (store_true)
-    #     --spec-only (store_true)
-    # - Retourner le parser.
-    raise NotImplementedError("À implémenter")
-
-
-def _run_pygame(
-    simulator: Simulator,
-    paths: List[List[Zone]],
-    reports: List[TurnReport],
-    title: str,
-) -> int:
-    # - Import dynamique de flyin.pygame_view (catch ImportError → print stderr + return 4).
-    # - Construire PygameView(simulator.graph, simulator, paths, reports, title=title) puis view.run().
-    # - Catch PygameUnavailableError → print stderr + return 4.
-    # - Sinon retourner 0.
-    raise NotImplementedError("À implémenter")
+    parser = argparse.ArgumentParser(
+        prog="fly-in",
+        description="Route a fleet of drones from start to end in fewest turns.",
+    )
+    parser.add_argument("map_file", help="path to the map file to simulate")
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="disable ANSI colours in the output",
+    )
+    parser.add_argument(
+        "--spec-only",
+        action="store_true",
+        help="print only the spec-mandated lines (one per turn)",
+    )
+    return parser
 
 
 def run(argv: Optional[List[str]] = None) -> int:
-    # - args = _build_arg_parser().parse_args(argv).
-    # - Si args.menu OU args.map_file None → from flyin.menu import Menu ; Menu().run() ; return 0.
-    # - graph = MapParser().parse_file(args.map_file):
-    #     - catch MapParseError → stderr + return 2.
-    #     - catch OSError → stderr + return 2.
-    # - simulator = Simulator(graph).
-    # - paths = simulator.prepare() ; reports = simulator.run() (catch RuntimeError → stderr + 3).
-    # - Si args.pygame → _run_pygame(...) et return son code.
-    # - Sinon view = TerminalView(simulator, use_colour=not args.no_color)
-    #         view.render_full(paths, reports, spec_only=args.spec_only).
-    # - return 0.
-    raise NotImplementedError("À implémenter")
+    args = _build_arg_parser().parse_args(argv)
+    try:
+        graph = MapParser().parse_file(args.map_file)
+    except MapParseError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+
+    simulator = Simulator(graph)
+    try:
+        paths = simulator.prepare()
+        reports = simulator.run()
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
+        return 3
+
+    view = TerminalView(simulator, use_colour=not args.no_color)
+    view.render_full(paths, reports, spec_only=args.spec_only)
+    return 0
 
 
 def main() -> None:
-    # - sys.exit(run()) — propage le code retour au shell.
-    raise NotImplementedError("À implémenter")
+    sys.exit(run())
 
 
 if __name__ == "__main__":
