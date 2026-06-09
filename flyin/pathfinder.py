@@ -14,14 +14,16 @@ from collections import deque
 from typing import Dict, List, Optional, Set, Tuple
 
 from flyin.graph import Graph
-from flyin.network import Zone
+from flyin.network import Zone, ZoneType
 
 
-# A connection key (sorted endpoint names) — used to forbid specific edges.
 ConnectionKey = Tuple[str, str]
 
 
 def _edge_key(a: str, b: str) -> ConnectionKey:
+    """
+    Return a canonical (sorted) key identifying the edge between ``a`` and ``b``.
+    """
     first, second = sorted((a, b))
     return (first, second)
 
@@ -32,8 +34,6 @@ class PathFinder:
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
 
-    # ----------------------------------------------------------------- BFS API
-
     def bfs(
         self,
         source: Zone,
@@ -41,8 +41,12 @@ class PathFinder:
         banned_zones: Optional[Set[str]] = None,
         banned_edges: Optional[Set[ConnectionKey]] = None,
     ) -> Optional[List[Zone]]:
-        # Same structure as the maze-solver BFS, transposed onto the graph:
-        # explore neighbours via graph.neighbors(...) instead of N/E/S/W.
+        """Find a shortest zone path from ``source`` to ``target`` via BFS.
+
+        Blocked zones are always skipped; ``banned_zones`` and ``banned_edges``
+        are additionally avoided (except the target itself). Returns the path as
+        a list of zones, or ``None`` if no route exists.
+        """
         banned_zones = banned_zones or set()
         banned_edges = banned_edges or set()
 
@@ -86,14 +90,12 @@ class PathFinder:
         return [self.graph.get_zone(name) for name in names]
 
     def find_candidate_paths(self, max_paths: int) -> List[List[Zone]]:
-        # Build a diverse pool of routes the scheduler can spread drones over.
-        # Two complementary BFS-based passes feed the pool:
-        #   * edge-disjoint paths — great when the graph has truly parallel
-        #     routes (each drone gets its own corridor);
-        #   * node-spur paths — bans one intermediate zone of the shortest path
-        #     at a time, which surfaces alternatives that legitimately SHARE a
-        #     high-capacity bottleneck edge (e.g. a final merge->goal link).
-        # The simulator's per-turn capacity rules then resolve any congestion.
+        """Return up to ``max_paths`` distinct start-to-end paths, cheapest first.
+
+        Mines edge-disjoint routes by repeatedly banning the edges already used,
+        then adds detours that avoid each intermediate zone of the base path, so
+        the scheduler has alternatives to spread drones across.
+        """
         if max_paths <= 0:
             return []
         start = self.graph.start
@@ -107,6 +109,7 @@ class PathFinder:
         seen: Set[Tuple[str, ...]] = set()
 
         def add(path: Optional[List[Zone]]) -> None:
+            """Add ``path`` to the pool unless it is ``None`` or already seen."""
             if path is None:
                 return
             key = tuple(zone.name for zone in path)
@@ -117,7 +120,6 @@ class PathFinder:
 
         add(base)
 
-        # Pass 1 — edge-disjoint routes.
         used_edges: Set[ConnectionKey] = set()
         for a, b in zip(base, base[1:]):
             used_edges.add(_edge_key(a.name, b.name))
@@ -131,12 +133,24 @@ class PathFinder:
         for zone in base[1:-1]:
             add(self.bfs(start, end, banned_zones={zone.name}))
 
-        pool.sort(key=self.path_cost)
+        pool.sort(key=self._path_rank)
         return pool[:max_paths]
 
-    # ------------------------------------------------------------------ utils
+    @classmethod
+    def _path_rank(cls, path: List[Zone]) -> Tuple[int, int]:
+        """Rank a path: cheapest first, then most ``priority`` zones.
+
+        The subject mandates that ``priority`` zones (same 1-turn cost as
+        ``normal``) be *preferred*. We break cost ties toward the path that
+        traverses the fewest non-priority zones, so an equally cheap route
+        through priority zones wins.
+        """
+        non_priority = sum(
+            1 for zone in path[1:] if zone.zone_type is not ZoneType.PRIORITY
+        )
+        return (cls.path_cost(path), non_priority)
 
     @staticmethod
     def path_cost(path: List[Zone]) -> int:
-        # The first zone (the start) has no entry cost.
+        """Return the total move cost of a path (sum of entered zones' costs)."""
         return sum(zone.zone_type.move_cost for zone in path[1:])

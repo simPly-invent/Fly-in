@@ -24,9 +24,8 @@ class Graph:
         self._start: Optional[Zone] = None
         self._end: Optional[Zone] = None
 
-    # ------------------------------------------------------------------ zones
-
     def add_zone(self, zone: Zone) -> None:
+        """Register a zone, tracking start/end hubs and rejecting duplicates."""
         if zone.name in self._zones:
             raise ValueError("error: duplicate value")
         if zone.is_start:
@@ -41,32 +40,36 @@ class Graph:
         self._adjacency[zone.name] = []
 
     def get_zone(self, name: str) -> Zone:
+        """Return the zone named ``name`` or raise ``KeyError`` if unknown."""
         if name in self._zones:
             return self._zones[name]
         raise KeyError(f"unknown zone: {name!r}")
 
     def has_zone(self, name: str) -> bool:
+        """Return ``True`` if a zone named ``name`` is registered."""
         return name in self._zones
 
     @property
     def zones(self) -> Iterable[Zone]:
+        """All registered zones."""
         return self._zones.values()
 
     @property
     def start(self) -> Zone:
+        """The start hub, or raise ``ValueError`` if none was declared."""
         if self._start is None:
             raise ValueError("graph has no start_hub")
         return self._start
 
     @property
     def end(self) -> Zone:
+        """The end hub, or raise ``ValueError`` if none was declared."""
         if self._end is None:
             raise ValueError("graph has no end_hub")
         return self._end
 
-    # ------------------------------------------------------------ connections
-
     def add_connection(self, connection: Connection) -> None:
+        """Register an edge and update the adjacency map, rejecting duplicates."""
         first, second = sorted((connection.zone_a.name, connection.zone_b.name))
         key = (first, second)
         if key in self._connections:
@@ -76,6 +79,7 @@ class Graph:
         self._adjacency[connection.zone_b.name].append(connection)
 
     def neighbors(self, zone_name: str) -> List[Tuple[Zone, Connection]]:
+        """Return the ``(zone, connection)`` pairs adjacent to ``zone_name``."""
         zone = self.get_zone(zone_name)
         result: List[Tuple[Zone, Connection]] = []
         for connexion in self._adjacency.get(zone_name, []):
@@ -84,6 +88,7 @@ class Graph:
         return result
 
     def get_connection(self, name_a: str, name_b: str) -> Connection:
+        """Return the connection between two zones or raise ``KeyError``."""
         first, second = sorted((name_a, name_b))
         key = (first, second)
         try:
@@ -95,11 +100,11 @@ class Graph:
 
     @property
     def connections(self) -> Iterable[Connection]:
+        """All registered connections."""
         return self._connections.values()
 
-    # ------------------------------------------------------------------ misc
-
     def validate(self) -> None:
+        """Check the graph has passable start and end hubs, else raise ``ValueError``."""
         if self._start is None:
             raise ValueError("no start_hub declared")
         if self._end is None:

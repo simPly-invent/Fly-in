@@ -50,9 +50,8 @@ class MapParser:
         self._pending_zones: List[Tuple[int, str, List[str]]] = []
         self._pending_connections: List[Tuple[int, str, str, str]] = []
 
-    # --------------------------------------------------------------- entrypoint
-
     def parse_file(self, path: Union[str, Path]) -> Graph:
+        """Read the file at ``path`` and parse it into a validated ``Graph``."""
         file_path = Path(path)
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -63,6 +62,11 @@ class MapParser:
         return self.parse_text(content)
 
     def parse_text(self, text: str) -> Graph:
+        """Parse map text line by line and return a validated ``Graph``.
+
+        Zones and connections are queued first so they can be built in two
+        passes, letting connections reference zones declared further down.
+        """
         self._reset()
         for line_no, raw in enumerate(text.splitlines(), start=1):
             line = self._strip_comment(raw).strip()
@@ -77,9 +81,8 @@ class MapParser:
         self._graph.validate()
         return self._graph
 
-    # ------------------------------------------------------------------ helpers
-
     def _reset(self) -> None:
+        """Clear all parser state so the instance can be reused."""
         self._nb_drones = None
         self._graph = None
         self._pending_zones = []
@@ -87,12 +90,14 @@ class MapParser:
 
     @staticmethod
     def _strip_comment(line: str) -> str:
+        """Return ``line`` truncated at the first ``#`` comment marker."""
         idx = line.find("#")
         if idx == -1:
             return line
         return line[:idx]
 
     def _dispatch(self, line_no: int, line: str) -> None:
+        """Route a non-empty line to the handler for its directive keyword."""
         if line.startswith("nb_drones:"):
             self._parse_nb_drones(line_no, line)
         elif line.startswith("start_hub:"):
@@ -106,9 +111,8 @@ class MapParser:
         else:
             raise MapParseError(f"unrecognized directive: {line!r}", line_no)
 
-    # ------------------------------------------------------------- nb_drones
-
     def _parse_nb_drones(self, line_no: int, line: str) -> None:
+        """Parse the ``nb_drones:`` directive into a positive integer."""
         if self._nb_drones is not None:
             raise MapParseError("duplicate 'nb_drones:'", line_no)
         payload = line[len("nb_drones:"):].strip()
@@ -122,13 +126,14 @@ class MapParser:
             ) from exc
         if value <= 0:
             raise MapParseError("nb_drones must be positive", line_no)
+        elif value >= 1000:
+            raise MapParseError("nb_drones must be less than 1000", line_no)
         self._nb_drones = value
-
-    # ------------------------------------------------------------------ zones
 
     def _queue_zone(
         self, line_no: int, line: str, prefix: str, role: str
     ) -> None:
+        """Validate a hub directive and queue it for the zone-building pass."""
         payload = line[len(prefix):].strip()
         tokens, metadata = self._split_metadata(line_no, payload)
         if len(tokens) != 3:
@@ -150,6 +155,7 @@ class MapParser:
         )
 
     def _build_zones(self) -> None:
+        """Turn queued zone directives into ``Zone`` objects on the graph."""
         assert self._graph is not None
         for line_no, role, fields in self._pending_zones:
             name = fields[0]
@@ -181,9 +187,8 @@ class MapParser:
             except ValueError as exc:
                 raise MapParseError(str(exc), line_no) from exc
 
-    # ------------------------------------------------------------- connections
-
     def _queue_connection(self, line_no: int, line: str) -> None:
+        """Validate a ``connection:`` directive and queue it for building."""
         payload = line[len("connection:"):].strip()
         tokens, metadata = self._split_metadata(line_no, payload)
         if len(tokens) != 1:
@@ -205,6 +210,7 @@ class MapParser:
         )
 
     def _build_connections(self) -> None:
+        """Turn queued connections into edges, checking endpoints exist."""
         assert self._graph is not None
         for line_no, name_a, name_b, meta_str in self._pending_connections:
             for endpoint in (name_a, name_b):
@@ -229,10 +235,9 @@ class MapParser:
             except ValueError as exc:
                 raise MapParseError(str(exc), line_no) from exc
 
-    # ------------------------------------------------------------------ tools
-
     @staticmethod
     def _validate_name(line_no: int, name: str) -> None:
+        """Ensure a zone name is non-empty and free of spaces and dashes."""
         if not name:
             raise MapParseError("empty zone name", line_no)
         if not _NAME_RE.match(name):
@@ -245,6 +250,7 @@ class MapParser:
     def _split_metadata(
         line_no: int, payload: str
     ) -> Tuple[List[str], List[str]]:
+        """Split a payload into positional tokens and ``[...]`` metadata tokens."""
         open_idx = payload.find("[")
         if open_idx == -1:
             return (payload.split(), [])
@@ -262,6 +268,7 @@ class MapParser:
 
     @staticmethod
     def _metadata_dict(line_no: int, tokens: List[str]) -> Dict[str, str]:
+        """Parse ``key=value`` metadata tokens into a dict, rejecting duplicates."""
         result: Dict[str, str] = {}
         for token in tokens:
             match = _METADATA_TOKEN_RE.match(token)
@@ -282,6 +289,7 @@ class MapParser:
         default: int,
         key: str,
     ) -> int:
+        """Parse an optional positive-int metadata value, or return ``default``."""
         if raw is None:
             return default
         try:

@@ -1,5 +1,7 @@
 # Runtime: stdlib-only (no graph library is allowed per the subject).
 
 # Dev tooling for linting / type checking.
-flake8>=6.0
-mypy>=1.5
+flake8
+mypy
+pydantic
+

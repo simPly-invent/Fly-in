@@ -33,6 +33,7 @@ class ZoneType(Enum):
 
     @classmethod
     def from_string(cls, value: str) -> "ZoneType":
+        """Parse a zone-type name (case-insensitive) into a ``ZoneType``."""
         value = value.strip().lower()
         for element in ZoneType:
             if element.value == value:
@@ -41,6 +42,7 @@ class ZoneType(Enum):
 
     @property
     def move_cost(self) -> int:
+        """Number of turns it takes to enter a zone of this type."""
         if self is ZoneType.RESTRICTED:
             return 2
         else:
@@ -73,6 +75,7 @@ class Zone:
 
     @property
     def is_passable(self) -> bool:
+        """``True`` unless the zone is blocked (drones may not enter)."""
         if self.zone_type is not ZoneType.BLOCKED:
             return True
         else:
@@ -80,16 +83,19 @@ class Zone:
 
     @property
     def is_terminal(self) -> bool:
+        """``True`` if this zone is the start or the end hub."""
         if self.is_start or self.is_end:
             return True
         return False
 
     def zone_capacity(self) -> int:
+        """Max drones the zone can hold (unbounded for terminal hubs)."""
         if self.is_terminal:
             return self.LARGE_VALUE
         return self.max_drones
 
     def display(self) -> str:
+        """Return a verbose human-readable representation of the zone."""
         return (f"Zone(name=<{self.name}>, x=<{self.x}>, y=<{self.y}>, "
                 f"type=<{self.zone_type.value}>, max_drones=<{self.max_drones}>)")
 

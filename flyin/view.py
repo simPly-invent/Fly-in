@@ -16,8 +16,6 @@ from flyin.pathfinder import PathFinder
 from flyin.simulator import Simulator, TurnReport
 
 
-# Common color names from the map files mapped to ANSI 8-color codes.
-# Names not listed here fall back to no colour (uncoloured terminal output).
 ANSI_RESET = "\033[0m"
 ANSI_BOLD = "\033[1m"
 ANSI_DIM = "\033[2m"
@@ -50,12 +48,14 @@ _MARKERS: Dict[ZoneType, str] = {
 
 
 def _color_for(name: Optional[str]) -> str:
+    """Return the ANSI escape for a colour name, or ``""`` if unknown/``None``."""
     if name is None:
         return ""
     return _COLOR_MAP.get(name.lower(), "")
 
 
 def _zone_marker(zone: Zone) -> str:
+    """Return the single-character map marker for a zone (S/E or type glyph)."""
     if zone.is_start:
         return "S"
     if zone.is_end:
@@ -76,22 +76,18 @@ class TerminalView:
         self.stream: TextIO = stream if stream is not None else sys.stdout
         self.use_colour = use_colour
 
-    # ----------------------------------------------------------------- write
-
-    def _write(self, text: str) -> None:
-        self.stream.write(text)
-
     def _writeln(self, text: str = "") -> None:
-        self._write(text + "\n")
+        """Write text followed by a newline."""
+        print(text, file=self.stream)
 
     def _styled(self, text: str, *codes: str) -> str:
+        """Wrap ``text`` in the given ANSI codes, unless colour is disabled."""
         if not self.use_colour or not codes:
             return text
         return "".join(codes) + text + ANSI_RESET
 
-    # ----------------------------------------------------------- top sections
-
     def render_header(self, paths: List[List[Zone]]) -> None:
+        """Print the run summary: counts, start/end hubs, and candidate paths."""
         g = self.simulator.graph
         self._writeln(self._styled("=== Fly-in simulation ===", ANSI_BOLD))
         self._writeln(
@@ -110,6 +106,7 @@ class TerminalView:
         self._writeln()
 
     def render_legend(self) -> None:
+        """Print the legend explaining each zone marker."""
         legend = (
             "S=start  E=end  o=normal  "
             f"{self._styled('*=priority', _color_for('cyan'))}  "
@@ -119,28 +116,28 @@ class TerminalView:
         self._writeln(self._styled("Legend: ", ANSI_BOLD) + legend)
         self._writeln()
 
-    # ------------------------------------------------------------- per turn
-
     def render_turn(self, report: TurnReport) -> None:
+        """Print one turn's moves prefixed with its turn number."""
         line = report.render()
         prefix = self._styled(f"T{report.turn:>3}: ", ANSI_DIM)
         self._writeln(prefix + line)
 
     def render_simulation(self, reports: List[TurnReport]) -> None:
+        """Print the full turn-by-turn simulation log."""
         self._writeln(self._styled("Simulation log:", ANSI_BOLD))
         for report in reports:
             self.render_turn(report)
         self._writeln()
 
     def render_spec_output(self, reports: List[TurnReport]) -> None:
+        """Print the moves in the bare spec-mandated format (one line per turn)."""
         self._writeln(self._styled("Spec output:", ANSI_BOLD))
         for report in reports:
             self._writeln(report.render())
         self._writeln()
 
-    # ---------------------------------------------------------------- stats
-
     def render_stats(self) -> None:
+        """Print end-of-run statistics (turns, deliveries, costs)."""
         sim = self.simulator
         delivered = sum(1 for d in sim.drones if d.delivered)
         self._writeln(self._styled("Statistics:", ANSI_BOLD))
@@ -151,9 +148,8 @@ class TerminalView:
             f"  avg turns per drone: {sim.average_turns_per_drone():.2f}"
         )
 
-    # ------------------------------------------------------------- helpers
-
     def _styled_zone(self, zone: Zone) -> str:
+        """Return a coloured, marker-prefixed label for a zone."""
         marker = _zone_marker(zone)
         colour = _color_for(zone.color)
         label = f"{marker}{zone.name}"
@@ -169,6 +165,7 @@ class TerminalView:
         reports: List[TurnReport],
         spec_only: bool = False,
     ) -> None:
+        """Render the whole run; with ``spec_only`` print just the spec lines."""
         if spec_only:
             for report in reports:
                 self._writeln(report.render())
@@ -187,5 +184,6 @@ def render(
     use_colour: bool = True,
     spec_only: bool = False,
 ) -> None:
+    """Convenience wrapper: build a ``TerminalView`` and render the full run."""
     view = TerminalView(simulator, use_colour=use_colour)
     view.render_full(paths, reports, spec_only=spec_only)

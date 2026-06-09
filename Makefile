@@ -1,27 +1,28 @@
 PYTHON := python3
 PIP    := $(PYTHON) -m pip
-MAP    := maps/easy/01_linear_path.txt
 
 .PHONY: install run debug clean lint lint-strict help
 
 help:
-	@echo "Fly-in -- available targets:"
-	@echo "  make install        Install project dependencies"
-	@echo "  make run MAP=...    Run the simulation on a map file (terminal)"
-	@echo "  make debug MAP=...  Run the simulation under pdb"
-	@echo "  make clean          Remove caches and bytecode"
-	@echo "  make lint           flake8 + mypy with mandatory flags"
-	@echo "  make lint-strict    flake8 + mypy --strict (optional)"
+	@echo "******************************************************************"
+	@echo "*Fly-in -- available targets:								  *"
+	@echo "*  make install        Install project dependencies           *"
+	@echo "*  make run            Launch the interactive map menu          *"
+	@echo "*  make debug          Launch the menu under pdb	      	  *"
+	@echo "*  make clean          Remove caches and bytecode	          *"
+	@echo "*  make lint           flake8 + mypy with mandatory flags	  *"
+	@echo "*  make lint-strict    flake8 + mypy --strict (optional)          *"
+	@echo "******************************************************************"
 
 install:
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
 
 run:
-	$(PYTHON) main.py $(MAP)
+	$(PYTHON) main.py
 
 debug:
-	$(PYTHON) -m pdb main.py $(MAP)
+	$(PYTHON) -m pdb main.py
 
 clean:
 	rm -rf __pycache__ */__pycache__ */*/__pycache__
