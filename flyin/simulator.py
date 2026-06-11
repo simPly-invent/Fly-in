@@ -233,10 +233,6 @@ class Simulator:
             """Steps left on the drone's path (leaders have the fewest)."""
             return len(d.path) - 1 - d.path_index
 
-        # Process the most advanced drones first so leaders vacate a zone
-        # before followers try to enter it (lets trains flow through
-        # capacity-1 corridors and merge points). drone_id breaks ties for
-        # a deterministic, reproducible move order.
         ordered = sorted(self.drones, key=lambda d: (remaining(d), d.drone_id))
         for drone in ordered:
             if drone.delivered or drone.is_in_transit:
