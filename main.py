@@ -27,7 +27,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser for the CLI."""
     parser = argparse.ArgumentParser(
         prog="fly-in",
-        description="Route a fleet of drones from start to end in fewest turns.",
+        description=(
+            "Route a fleet of drones from start to end in fewest turns."
+        ),
     )
     parser.add_argument(
         "--no-color",
@@ -113,4 +115,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"\nError: {e}")

@@ -28,7 +28,7 @@ _TIER_ORDER = ("easy", "medium", "hard", "challenger")
 
 
 def _tier_sort_key(tier: str) -> Tuple[int, str]:
-    """Sort known tiers in difficulty order; unknown tiers come last alphabetically."""
+    """Sort known tiers by difficulty; unknown tiers come last."""
     try:
         return (_TIER_ORDER.index(tier), tier)
     except ValueError:
@@ -46,11 +46,17 @@ def discover_maps(root: Path) -> Dict[str, List[Path]]:
     try:
         candidates = sorted(root.rglob("*.txt"))
     except OSError as exc:
-        raise RuntimeError(f"cannot read maps directory '{root}': {exc}") from exc
+        raise RuntimeError(
+            f"cannot read maps directory '{root}': {exc}"
+        ) from exc
 
     for path in candidates:
         try:
-            tier = path.relative_to(root).parts[0] if path.parent != root else "."
+            tier = (
+                path.relative_to(root).parts[0]
+                if path.parent != root
+                else "."
+            )
         except ValueError:
             tier = "."
         if path.parent == root:
@@ -72,12 +78,15 @@ class Menu:
             return text
         return "".join(codes) + text + ANSI_RESET
 
-    def _render(self, ordered: List[Path], grouped: Dict[str, List[Path]]) -> None:
+    def _render(
+        self, ordered: List[Path], grouped: Dict[str, List[Path]]
+    ) -> None:
         """Clear the screen and draw the numbered, tier-grouped map list."""
         print(CLEAR_SCREEN, end="")
-        print(self._styled("==========================================", ANSI_BOLD))
-        print(self._styled("       Fly-in :: Map selector             ", ANSI_BOLD))
-        print(self._styled("==========================================", ANSI_BOLD))
+        bar = "=" * 42
+        print(self._styled(bar, ANSI_BOLD))
+        print(self._styled("       Fly-in :: Map selector", ANSI_BOLD))
+        print(self._styled(bar, ANSI_BOLD))
         print()
 
         index = 1
@@ -94,10 +103,11 @@ class Menu:
         print(f"  {self._styled(' r)', ANSI_YELLOW)} Reload maps")
         print()
         total = len(ordered)
-        print(self._styled(f"({total} map(s) found in {self.maps_root})", ANSI_DIM))
+        summary = f"({total} map(s) found in {self.maps_root})"
+        print(self._styled(summary, ANSI_DIM))
 
     def prompt(self) -> Optional[Path]:
-        """Display the menu and return the chosen map path, or ``None`` to quit."""
+        """Display the menu; return the chosen path or ``None``."""
         while True:
             try:
                 grouped = discover_maps(self.maps_root)

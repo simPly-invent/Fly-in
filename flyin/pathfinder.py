@@ -22,7 +22,7 @@ ConnectionKey = Tuple[str, str]
 
 def _edge_key(a: str, b: str) -> ConnectionKey:
     """
-    Return a canonical (sorted) key identifying the edge between ``a`` and ``b``.
+    Return a canonical (sorted) key for the edge between ``a`` and ``b``.
     """
     first, second = sorted((a, b))
     return (first, second)
@@ -43,9 +43,9 @@ class PathFinder:
     ) -> Optional[List[Zone]]:
         """Find a shortest zone path from ``source`` to ``target`` via BFS.
 
-        Blocked zones are always skipped; ``banned_zones`` and ``banned_edges``
-        are additionally avoided (except the target itself). Returns the path as
-        a list of zones, or ``None`` if no route exists.
+        Blocked zones are always skipped; ``banned_zones`` and
+        ``banned_edges`` are also avoided (except the target itself).
+        Returns the path as a list of zones, or ``None`` if no route.
         """
         banned_zones = banned_zones or set()
         banned_edges = banned_edges or set()
@@ -90,11 +90,11 @@ class PathFinder:
         return [self.graph.get_zone(name) for name in names]
 
     def find_candidate_paths(self, max_paths: int) -> List[List[Zone]]:
-        """Return up to ``max_paths`` distinct start-to-end paths, cheapest first.
+        """Return up to ``max_paths`` start-to-end paths, cheapest first.
 
-        Mines edge-disjoint routes by repeatedly banning the edges already used,
-        then adds detours that avoid each intermediate zone of the base path, so
-        the scheduler has alternatives to spread drones across.
+        Mines edge-disjoint routes by repeatedly banning the edges
+        already used, then adds detours that avoid each intermediate
+        zone of the base path, so the scheduler has alternatives.
         """
         if max_paths <= 0:
             return []
@@ -109,7 +109,7 @@ class PathFinder:
         seen: Set[Tuple[str, ...]] = set()
 
         def add(path: Optional[List[Zone]]) -> None:
-            """Add ``path`` to the pool unless it is ``None`` or already seen."""
+            """Add ``path`` to the pool unless ``None`` or already seen."""
             if path is None:
                 return
             key = tuple(zone.name for zone in path)
@@ -152,5 +152,5 @@ class PathFinder:
 
     @staticmethod
     def path_cost(path: List[Zone]) -> int:
-        """Return the total move cost of a path (sum of entered zones' costs)."""
+        """Return the total move cost of a path (entered zones)."""
         return sum(zone.zone_type.move_cost for zone in path[1:])

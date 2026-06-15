@@ -48,14 +48,14 @@ _MARKERS: Dict[ZoneType, str] = {
 
 
 def _color_for(name: Optional[str]) -> str:
-    """Return the ANSI escape for a colour name, or ``""`` if unknown/``None``."""
+    """Return the ANSI escape for a colour name, or ``""`` if unknown."""
     if name is None:
         return ""
     return _COLOR_MAP.get(name.lower(), "")
 
 
 def _zone_marker(zone: Zone) -> str:
-    """Return the single-character map marker for a zone (S/E or type glyph)."""
+    """Return the single-char map marker for a zone (S/E or glyph)."""
     if zone.is_start:
         return "S"
     if zone.is_end:
@@ -87,7 +87,7 @@ class TerminalView:
         return "".join(codes) + text + ANSI_RESET
 
     def render_header(self, paths: List[List[Zone]]) -> None:
-        """Print the run summary: counts, start/end hubs, and candidate paths."""
+        """Print the run summary: counts, hubs, candidate paths."""
         g = self.simulator.graph
         self._writeln(self._styled("=== Fly-in simulation ===", ANSI_BOLD))
         self._writeln(
@@ -130,7 +130,7 @@ class TerminalView:
         self._writeln()
 
     def render_spec_output(self, reports: List[TurnReport]) -> None:
-        """Print the moves in the bare spec-mandated format (one line per turn)."""
+        """Print the moves in bare spec format (one line per turn)."""
         self._writeln(self._styled("Spec output:", ANSI_BOLD))
         for report in reports:
             self._writeln(report.render())
@@ -165,7 +165,7 @@ class TerminalView:
         reports: List[TurnReport],
         spec_only: bool = False,
     ) -> None:
-        """Render the whole run; with ``spec_only`` print just the spec lines."""
+        """Render the whole run; ``spec_only`` prints just spec lines."""
         if spec_only:
             for report in reports:
                 self._writeln(report.render())
@@ -184,6 +184,6 @@ def render(
     use_colour: bool = True,
     spec_only: bool = False,
 ) -> None:
-    """Convenience wrapper: build a ``TerminalView`` and render the full run."""
+    """Convenience wrapper: build a ``TerminalView`` and render."""
     view = TerminalView(simulator, use_colour=use_colour)
     view.render_full(paths, reports, spec_only=spec_only)

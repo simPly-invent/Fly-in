@@ -21,14 +21,14 @@ all implemented from scratch in the `flyin/` package.
 .
 ├── main.py                # CLI entry point
 ├── Makefile               # install / run / debug / clean / lint targets
-├── requirements.txt       # dev tooling only (flake8, mypy)
+├── requirements.txt       # runtime (pydantic) + dev tooling (flake8, mypy)
 ├── setup.cfg              # flake8 + mypy config
 ├── flyin/                 # OOP package
 │   ├── network.py         #   ZoneType, Zone, Connection (the data model)
 │   ├── graph.py           #   Graph (adjacency, validation)
 │   ├── parser.py          #   MapParser, MapParseError
 │   ├── pathfinder.py      #   PathFinder (BFS + edge-disjoint paths)
-│   ├── simulator.py       #   Drone, PathScheduler, Simulator (turn engine)
+│   ├── simulator.py       #   Drone, PathMonitor, Simulator (turn engine)
 │   └── view.py            #   TerminalView (ANSI-coloured rendering)
 └── maps/                  # provided test maps (easy / medium / hard / challenger)
 ```
@@ -41,24 +41,33 @@ all implemented from scratch in the `flyin/` package.
 make install
 ```
 
-The simulation only requires Python 3.10 or later and the standard library.
-`requirements.txt` holds the dev tooling (flake8, mypy) only.
+The simulation requires Python 3.10 or later and a single runtime dependency,
+`pydantic` (used for the turn-report value objects). `requirements.txt` also
+lists the dev tooling (flake8, mypy).
 
 ### Run
 
 ```sh
-make run MAP=maps/easy/02_simple_fork.txt    # terminal output
+make run                        # launch the interactive map menu
 # or directly:
-python main.py maps/medium/03_priority_puzzle.txt
-python main.py maps/hard/02_capacity_hell.txt --no-color --spec-only
+python main.py                  # interactive map menu
+python main.py --no-color       # plain output (no ANSI colours)
+python main.py --spec-only      # only the spec-mandated lines (one per turn)
+python main.py --maps-root DIR  # scan DIR instead of ./maps for maps
 ```
+
+The program launches an interactive menu listing every map found under `maps/`
+(or under `--maps-root`); pick one and its simulation runs. To test your own
+map, drop the `.txt` file into the maps directory, or point `--maps-root` at
+the folder that contains it.
 
 Available CLI options:
 
-| Option        | Effect                                                       |
-|---------------|--------------------------------------------------------------|
-| `--no-color`  | Disable ANSI colours (useful for piping or for CI logs).     |
-| `--spec-only` | Print only the spec-mandated lines (one per turn) and exit.  |
+| Option         | Effect                                                       |
+|----------------|--------------------------------------------------------------|
+| `--no-color`   | Disable ANSI colours (useful for piping or for CI logs).     |
+| `--spec-only`  | Print only the spec-mandated lines (one per turn).           |
+| `--maps-root`  | Directory scanned by the interactive menu (default: `./maps`).|
 
 Default output prints a header, the candidate paths, a legend, the
 turn-by-turn log, the spec-mandated lines and a short statistics block.
@@ -66,7 +75,7 @@ turn-by-turn log, the spec-mandated lines and a short statistics block.
 ### Debug
 
 ```sh
-make debug MAP=maps/hard/02_capacity_hell.txt   # runs under pdb
+make debug          # launch the interactive menu under pdb
 ```
 
 ### Lint
@@ -135,7 +144,7 @@ The candidates are deduplicated and sorted by cost; the scheduler then spreads
 drones across them and the simulator's per-turn capacity rules resolve any
 remaining congestion.
 
-### 3. Scheduling (`flyin/simulator.PathScheduler`)
+### 3. Scheduling (`flyin/simulator.PathMonitor`)
 
 Given the candidate paths and the number of drones, the scheduler greedily
 assigns each drone to the path with the smallest projected completion turn
@@ -149,15 +158,17 @@ Each simulation turn proceeds in two phases:
 * **Phase A — landings.** Drones mid-transit on a restricted-zone connection
   MUST arrive this turn (the subject forbids extra waiting on the connection),
   so they finish their transit first and free the connection.
-* **Phase B — greedy moves.** The remaining drones are processed in ascending
-  drone-id order. For each one we check the destination zone capacity and the
-  connection capacity against the moves already admitted this turn; if both
-  hold the drone moves (or starts a transit toward a restricted zone),
-  otherwise it waits. Drones leaving a zone free up its capacity for the same
-  turn, as required by the spec.
+* **Phase B — greedy moves.** The remaining drones are processed by fewest
+  remaining steps first — drones closest to the end move first, freeing the
+  zones behind them so followers can advance the same turn — with the drone id
+  as a deterministic tie-break. For each one we check the destination zone
+  capacity and the connection capacity against the moves already admitted this
+  turn; if both hold the drone moves (or starts a transit toward a restricted
+  zone), otherwise it waits. Drones leaving a zone free up its capacity for the
+  same turn, as required by the spec.
 
-This deterministic, id-ordered resolution is intentionally simple: every
-decision can be explained line by line during the peer review.
+This deterministic resolution (remaining-steps, then id) is intentionally
+simple: every decision can be explained line by line during the peer review.
 
 ### 5. Visualization (`flyin/view.py`)
 
@@ -176,8 +187,8 @@ requirement on its own.
 
 The subject defines reference targets per map (easy `< 10` turns, medium
 `10–30`, hard `< 60`). The provided maps live under `maps/` and can be run
-with `make run MAP=...` to compare the achieved turn count against the
-targets listed in the subject (VII.7).
+from the interactive menu (`make run`) to compare the achieved turn count
+against the targets listed in the subject (VII.7).
 
 ## Resources
 
@@ -188,15 +199,8 @@ targets listed in the subject (VII.7).
 
 ### Use of AI
 
-AI assistance (Claude) was used as a pair-programmer during this project:
+AI assistance was used as a pair-programmer during this project:
 
-* The BFS in `flyin/pathfinder.py` is an adaptation of a BFS the author wrote
-  in another 42 project (maze solver). The adaptation to the zone/connection
-  graph and the banned-edge / banned-zone constraints were drafted with AI
-  assistance and reviewed line by line by the author.
-* Boilerplate scaffolding (Makefile targets, `setup.cfg`, docstrings, type
-  hints) and the per-function algorithm comments were generated with AI
-  assistance.
 * All code in the repository has been read, understood and is owned by the
   author. Any function in this codebase can be explained on demand during the
   peer review.

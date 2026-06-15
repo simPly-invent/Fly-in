@@ -51,7 +51,7 @@ class MapParser:
         self._pending_connections: List[Tuple[int, str, str, str]] = []
 
     def parse_file(self, path: Union[str, Path]) -> Graph:
-        """Read the file at ``path`` and parse it into a validated ``Graph``."""
+        """Read the file at ``path`` and parse it into a ``Graph``."""
         file_path = Path(path)
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -250,7 +250,7 @@ class MapParser:
     def _split_metadata(
         line_no: int, payload: str
     ) -> Tuple[List[str], List[str]]:
-        """Split a payload into positional tokens and ``[...]`` metadata tokens."""
+        """Split payload into positional tokens and ``[...]`` metadata."""
         open_idx = payload.find("[")
         if open_idx == -1:
             return (payload.split(), [])
@@ -263,12 +263,14 @@ class MapParser:
         body = payload[open_idx + 1:close_idx].strip()
         tail = payload[close_idx + 1:].strip()
         if tail:
-            raise MapParseError("unexpected text after metadata block", line_no)
+            raise MapParseError(
+                "unexpected text after metadata block", line_no
+            )
         return (head.split(), body.split())
 
     @staticmethod
     def _metadata_dict(line_no: int, tokens: List[str]) -> Dict[str, str]:
-        """Parse ``key=value`` metadata tokens into a dict, rejecting duplicates."""
+        """Parse ``key=value`` tokens into a dict, rejecting dups."""
         result: Dict[str, str] = {}
         for token in tokens:
             match = _METADATA_TOKEN_RE.match(token)
@@ -289,7 +291,7 @@ class MapParser:
         default: int,
         key: str,
     ) -> int:
-        """Parse an optional positive-int metadata value, or return ``default``."""
+        """Parse an optional positive-int value, or return ``default``."""
         if raw is None:
             return default
         try:

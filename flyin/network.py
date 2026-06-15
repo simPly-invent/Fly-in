@@ -2,7 +2,7 @@
 
 This module groups the small value-objects that describe the network:
 
-* :class:`ZoneType` — the kind of a zone (normal / restricted / priority / blocked).
+* :class:`ZoneType` — kind of a zone (normal/restricted/priority/blocked).
 * :class:`Zone`     — a node of the network.
 * :class:`Connection` — an undirected edge linking two zones.
 
@@ -96,8 +96,10 @@ class Zone:
 
     def display(self) -> str:
         """Return a verbose human-readable representation of the zone."""
-        return (f"Zone(name=<{self.name}>, x=<{self.x}>, y=<{self.y}>, "
-                f"type=<{self.zone_type.value}>, max_drones=<{self.max_drones}>)")
+        return (
+            f"Zone(name=<{self.name}>, x=<{self.x}>, y=<{self.y}>, "
+            f"type=<{self.zone_type.value}>, max_drones=<{self.max_drones}>)"
+        )
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -141,7 +143,7 @@ class Connection:
         )
 
     def links(self, name_a: str, name_b: str) -> bool:
-        """Return True if this connection links the zones ``name_a``/``name_b``."""
+        """Return True if this connection links ``name_a``/``name_b``."""
         return self.endpoints == tuple(sorted((name_a, name_b)))
 
     def display_name(self) -> str:
@@ -149,8 +151,11 @@ class Connection:
         return f"{self.zone_a.name}-{self.zone_b.name}"
 
     def display(self) -> str:
-        """Return a verbose human-readable representation including capacity."""
-        return f"Connection({self.zone_a}-{self.zone_b}, cap={self.max_link_capacity})"
+        """Return a verbose representation including capacity."""
+        return (
+            f"Connection({self.zone_a}-{self.zone_b}, "
+            f"cap={self.max_link_capacity})"
+        )
 
     def __hash__(self) -> int:
         return hash(self.endpoints)

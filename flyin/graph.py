@@ -25,7 +25,7 @@ class Graph:
         self._end: Optional[Zone] = None
 
     def add_zone(self, zone: Zone) -> None:
-        """Register a zone, tracking start/end hubs and rejecting duplicates."""
+        """Register a zone, track start/end hubs, reject duplicates."""
         if zone.name in self._zones:
             raise ValueError("error: duplicate value")
         if zone.is_start:
@@ -69,8 +69,10 @@ class Graph:
         return self._end
 
     def add_connection(self, connection: Connection) -> None:
-        """Register an edge and update the adjacency map, rejecting duplicates."""
-        first, second = sorted((connection.zone_a.name, connection.zone_b.name))
+        """Register an edge, update adjacency, reject duplicate edges."""
+        first, second = sorted(
+            (connection.zone_a.name, connection.zone_b.name)
+        )
         key = (first, second)
         if key in self._connections:
             raise ValueError("duplicate connection")
@@ -79,7 +81,7 @@ class Graph:
         self._adjacency[connection.zone_b.name].append(connection)
 
     def neighbors(self, zone_name: str) -> List[Tuple[Zone, Connection]]:
-        """Return the ``(zone, connection)`` pairs adjacent to ``zone_name``."""
+        """Return the ``(zone, connection)`` pairs adjacent to a zone."""
         zone = self.get_zone(zone_name)
         result: List[Tuple[Zone, Connection]] = []
         for connexion in self._adjacency.get(zone_name, []):
@@ -104,7 +106,7 @@ class Graph:
         return self._connections.values()
 
     def validate(self) -> None:
-        """Check the graph has passable start and end hubs, else raise ``ValueError``."""
+        """Check start and end hubs exist and are passable, else raise."""
         if self._start is None:
             raise ValueError("no start_hub declared")
         if self._end is None:

@@ -45,7 +45,7 @@ class Drone:
 
     @property
     def is_in_transit(self) -> bool:
-        """``True`` while the drone is crossing a connection (restricted zone)."""
+        """``True`` while crossing a connection (restricted zone)."""
         return self.transit_connection is not None
 
     def assign_path(self, path: List[Zone]) -> None:
@@ -83,7 +83,8 @@ class Drone:
 
     def __repr__(self) -> str:
         if self.is_in_transit and self.transit_connection is not None:
-            return f"{self.label}@transit({self.transit_connection.display_name()})"
+            name = self.transit_connection.display_name()
+            return f"{self.label}@transit({name})"
         return f"{self.label}@{self.position.name}"
 
 
@@ -109,7 +110,7 @@ class TurnReport(BaseModel):
         return " ".join(move.render() for move in self.moves)
 
 
-class PathScheduler:
+class PathMonitor:
     """Assign drones to candidate paths to minimize makespan."""
 
     def __init__(self, paths: List[List[Zone]]) -> None:
@@ -156,7 +157,7 @@ class Simulator:
         paths = finder.find_candidate_paths(self.graph.nb_drones)
         if not paths:
             raise RuntimeError("no path from start to end")
-        scheduler = PathScheduler(paths)
+        scheduler = PathMonitor(paths)
         assignment = scheduler.assign(self.graph.nb_drones)
         self.drones = []
         for drone_id in range(1, self.graph.nb_drones + 1):
@@ -250,13 +251,16 @@ class Simulator:
             if edge_use.get(ek, 0) + 1 > connection.max_link_capacity:
                 continue
 
-            staying = occupancy.get(target.name, 0) - leaving.get(target.name, 0)
-            free = target.zone_capacity() - staying - arriving.get(target.name, 0)
+            occ = occupancy.get(target.name, 0)
+            staying = occ - leaving.get(target.name, 0)
+            free = target.zone_capacity() - staying
+            free -= arriving.get(target.name, 0)
             if free <= 0:
                 continue
 
             edge_use[ek] = edge_use.get(ek, 0) + 1
-            leaving[drone.position.name] = leaving.get(drone.position.name, 0) + 1
+            here = drone.position.name
+            leaving[here] = leaving.get(here, 0) + 1
             arriving[target.name] = arriving.get(target.name, 0) + 1
 
             if target.zone_type is ZoneType.RESTRICTED:
@@ -272,7 +276,10 @@ class Simulator:
                 if target == self.graph.end:
                     drone.delivered = True
                 report.moves.append(
-                    MoveRecord(drone_label=drone.label, destination=target.name)
+                    MoveRecord(
+                        drone_label=drone.label,
+                        destination=target.name,
+                    )
                 )
 
     def total_turns(self) -> int:
@@ -284,7 +291,7 @@ class Simulator:
         return sum(PathFinder.path_cost(d.path) for d in self.drones)
 
     def average_turns_per_drone(self) -> float:
-        """Return the mean path cost per drone, or ``0.0`` if there are none."""
+        """Return the mean path cost per drone, or 0.0 if none."""
         if not self.drones:
             return 0.0
         return self.total_path_cost() / len(self.drones)
