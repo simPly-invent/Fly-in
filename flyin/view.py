@@ -132,6 +132,12 @@ class TerminalView:
     def render_spec_output(self, reports: List[TurnReport]) -> None:
         """Print the moves in bare spec format (one line per turn)."""
         self._writeln(self._styled("Spec output:", ANSI_BOLD))
+        try:
+            with open("output.txt", "w", encoding="utf-8") as f:
+                for report in reports:
+                    f.write(f"{report.render()}\n")
+        except OSError as exc:
+            self._writeln(f"(could not write output.txt: {exc})")
         for report in reports:
             self._writeln(report.render())
         self._writeln()
