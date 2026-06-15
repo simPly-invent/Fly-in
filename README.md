@@ -188,7 +188,7 @@ requirement on its own.
 The subject defines reference targets per map (easy `< 10` turns, medium
 `10–30`, hard `< 60`). The provided maps live under `maps/` and can be run
 from the interactive menu (`make run`) to compare the achieved turn count
-against the targets listed in the subject (VII.7).
+against the targets listed in the subject (VII.7).    
 
 ## Resources
 
