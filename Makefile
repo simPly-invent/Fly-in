@@ -5,9 +5,9 @@ PIP    := $(PYTHON) -m pip
 
 help:
 	@echo "******************************************************************"
-	@echo "*Fly-in -- available targets:								  *"
-	@echo "*  make install        Install project dependencies           *"
-	@echo "*  make run            Launch the interactive map menu          *"
+	@echo "*Fly-in -- available targets:                                     *"
+	@echo "*  make install        Install project dependencies               *"
+	@echo "*  make run            Launch the interactive map menu            *"
 	@echo "*  make debug          Launch the menu under pdb	      	  *"
 	@echo "*  make clean          Remove caches and bytecode	          *"
 	@echo "*  make lint           flake8 + mypy with mandatory flags	  *"
@@ -19,13 +19,13 @@ install:
 	$(PIP) install -r requirements.txt
 
 run:
-	$(PYTHON) main.py
+	$(PYTHON) main.py --menu
 
 debug:
 	$(PYTHON) -m pdb main.py
 
 clean:
-	rm -rf __pycache__ */__pycache__ */*/__pycache__
+	rm -rf __pycache__ */__pycache__ */*/__pycache__  output.txt
 	rm -rf .mypy_cache .pytest_cache .ruff_cache
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true

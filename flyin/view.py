@@ -165,30 +165,30 @@ class TerminalView:
             return self._styled(label, ANSI_BOLD, colour)
         return self._styled(label, ANSI_BOLD)
 
-    def render_full(
-        self,
-        paths: List[List[Zone]],
-        reports: List[TurnReport],
-        spec_only: bool = False,
-    ) -> None:
-        """Render the whole run; ``spec_only`` prints just spec lines."""
+    def render_full(self,
+                    paths: List[List[Zone]],
+                    reports: List[TurnReport],
+                    spec_only: bool = False) -> None:
         if spec_only:
             for report in reports:
                 self._writeln(report.render())
             return
         self.render_header(paths)
         self.render_legend()
-        self.render_simulation(reports)
+        self._writeln(self._styled("Simulation log:", ANSI_BOLD))
+        for report in reports:
+            self.render_turn(report)
+        self._writeln()
         self.render_spec_output(reports)
         self.render_stats()
 
 
 def render(
-    simulator: Simulator,
-    paths: List[List[Zone]],
-    reports: List[TurnReport],
-    use_colour: bool = True,
-    spec_only: bool = False,
+        simulator: Simulator,
+        paths: List[List[Zone]],
+        reports: List[TurnReport],
+        use_colour: bool = True,
+        spec_only: bool = False,
 ) -> None:
     """Convenience wrapper: build a ``TerminalView`` and render."""
     view = TerminalView(simulator, use_colour=use_colour)

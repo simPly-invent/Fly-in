@@ -32,6 +32,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--menu",
+        action="store_true",
+        help="browse maps interactively",
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="disable ANSI colours in the output",
@@ -42,9 +47,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="print only the spec-mandated lines (one per turn)",
     )
     parser.add_argument(
-        "--maps-root",
-        default=str(DEFAULT_MAPS_ROOT),
-        help="directory scanned by the interactive menu (default: ./maps)",
+        "map_file",
+        nargs="?",
+        default=None,
+        help="map file to simulate directly (without --menu)",
     )
     return parser
 
@@ -57,13 +63,9 @@ def _simulate(map_file: str, use_colour: bool, spec_only: bool) -> int:
     """
     try:
         graph = MapParser().parse_file(map_file)
-    except MapParseError as exc:
+    except (OSError, MapParseError) as exc:
         print(exc, file=sys.stderr)
         return 2
-    except OSError as exc:
-        print(exc, file=sys.stderr)
-        return 2
-
     simulator = Simulator(graph)
     try:
         paths = simulator.prepare()
@@ -90,18 +92,27 @@ def _wait_for_enter() -> bool:
 def run(argv: Optional[List[str]] = None) -> int:
     """Run the interactive menu loop, simulating each chosen map until quit."""
     args = _build_arg_parser().parse_args(argv)
+    menu_choice = args.menu
     use_colour = not args.no_color
     spec_only = args.spec_only
 
-    menu = Menu(Path(args.maps_root), use_colour=use_colour)
-    while True:
-        choice = menu.prompt()
-        if choice is None:
-            print("Bye.")
-            return 0
-        _simulate(str(choice), use_colour, spec_only)
-        if not _wait_for_enter():
-            return 0
+    if menu_choice:
+        menu = Menu(Path(DEFAULT_MAPS_ROOT), use_colour=use_colour)
+        while True:
+            choice = menu.prompt()
+            if choice is None:
+                print("Bye.")
+                return 0
+            _simulate(str(choice), use_colour, spec_only)
+            if not _wait_for_enter():
+                return 0
+    else:
+        map_path = Path(args.map_file)
+        if map_path.is_dir():
+            print("Use --menu to browse a directory.", file=sys.stderr)
+            return 1
+        _simulate(str(map_path), use_colour, spec_only)
+    return 0
 
 
 def main() -> None:

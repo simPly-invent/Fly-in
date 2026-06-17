@@ -50,10 +50,9 @@ lists the dev tooling (flake8, mypy).
 ```sh
 make run                        # launch the interactive map menu
 # or directly:
-python main.py                  # interactive map menu
+python main.py --menu           # interactive map menu
 python main.py --no-color       # plain output (no ANSI colours)
 python main.py --spec-only      # only the spec-mandated lines (one per turn)
-python main.py --maps-root DIR  # scan DIR instead of ./maps for maps
 ```
 
 The program launches an interactive menu listing every map found under `maps/`
