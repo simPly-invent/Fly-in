@@ -15,6 +15,8 @@ fully type-checked (mypy) and lint-clean (flake8). No external graph library
 is used — the BFS, the multi-path search and the turn-by-turn simulation are
 all implemented from scratch in the `flyin/` package.
 
+![Fly-in simulation on a medium map](docs/demo.gif)
+
 ## Project layout
 
 ```
